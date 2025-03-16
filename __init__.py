@@ -23,7 +23,7 @@ import string
 import time
 from bpy.app.handlers import persistent
 
-from tabs_interface import panel_order
+from . import panel_order
 
 DEBUG = False
 
@@ -1869,7 +1869,7 @@ class ActivateCategory(bpy.types.Operator):
         return {"FINISHED"}
 
     def invoke(self, context, event):
-        prefs = bpy.context.preferences.addons["tabs_interface"].preferences
+        prefs = bpy.context.preferences.addons[__package__].preferences
         if event.shift:  # for Multi-selection self.obj = context.selected_objects
             self.shift = True
             # print('shift')
@@ -2040,7 +2040,9 @@ class ActivatePoseBoneConstraint(bpy.types.Operator):
 class TabsPanel:
     @classmethod
     def poll(cls, context):
-        prefs = bpy.context.preferences.addons["tabs_interface"].preferences
+        prefs = bpy.context.preferences.addons[__package__].preferences
+        if prefs is None:
+            return True
         if prefs.enable_disabling:
             if prefs.disable_PROPERTIES and context.area.type == "PROPERTIES":
                 return False
@@ -2187,7 +2189,7 @@ class VIEW3D_PT_Transform(bpy.types.Panel):
 
 
 def updateDisabling(self, context):
-    prefs = bpy.context.preferences.addons["tabs_interface"].preferences
+    prefs = bpy.context.preferences.addons[__package__].preferences
     s = bpy.context.window_manager
     spaces = s.panelSpaces
     panel_data = s.panelData
@@ -2222,7 +2224,7 @@ def updateDisabling(self, context):
 
 
 class TabInterfacePreferences(bpy.types.AddonPreferences):
-    bl_idname = "tabs_interface"
+    bl_idname = __package__
     # here you define the addons customizable props
     original_panels: bpy.props.BoolProperty(
         name="Default blender panels", description="", default=False
@@ -2387,7 +2389,7 @@ def createSceneTabData():
 
     while len(_update_tabs) > 0:
         pt = _update_tabs.pop()
-        print("tabs_interface: updating  ", pt)
+        print("Tabs interface: updating  ", pt)
         # print( r.panelTabData)
         # print( s.panelTabData.get(pt.bl_rna.identifier))
         pname = pt.bl_rna.identifier
@@ -2489,7 +2491,10 @@ def register():
 
     # disable later, just for testing:
     # bpy.utils.register_class(testContext)
-
+    bpy.utils.register_class(tabSetups)
+    bpy.utils.register_class(panelData)
+    bpy.utils.register_class(tabCategoryData)
+    bpy.utils.register_class(TabInterfacePreferences)
     bpy.utils.register_class(PanelUp)
     bpy.utils.register_class(PanelDown)
     bpy.utils.register_class(WritePanelOrder)
@@ -2499,10 +2504,6 @@ def register():
     bpy.utils.register_class(ActivateModifier)
     bpy.utils.register_class(ActivateConstraint)
     bpy.utils.register_class(ActivatePoseBoneConstraint)
-    bpy.utils.register_class(tabSetups)
-    bpy.utils.register_class(panelData)
-    bpy.utils.register_class(tabCategoryData)
-    bpy.utils.register_class(TabInterfacePreferences)
 
     bpy.types.Object.active_modifiers = (
         []
