@@ -1,0 +1,14 @@
+schema_version = "1.0.0"
+id = "tabs_interface"
+name = "Tabs Interface"
+version = "3.0.0"
+tagline = "Blender tabbed. Minimize scrolling during panel navigation."
+maintainer = "Vilem Duha, BlenderKit <admin@blenderkit.com>"
+type = "add-on"
+tags = ["Interface", "Add Interface"]
+blender_version_min = "4.5.0"
+license = ["GPL-2.0-or-later"]
+website = "https://www.blenderkit.com/asset-gallery-detail/d55d15f7-22f3-433f-9e6a-e7b3544256c0/"
+copyright = [
+    "2025 Vilem Duha",
+]
