@@ -193,7 +193,6 @@ spaces = {'PROPERTIES': {'WINDOW': [
     'DATA_PT_custom_props_speaker',
     'DATA_PT_custom_props_volume',
     'DATA_PT_mesh_attributes',
-    'DATA_PT_mesh_attributes',
     'DATA_PT_texture_space',
     'DATA_PT_remesh',
     'DATA_PT_customdata',
