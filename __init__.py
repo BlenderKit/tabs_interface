@@ -2215,19 +2215,21 @@ def tab_init_handler(scene):
     s = bpy.context.window_manager
 
     allpanels = getPanelIDs()
-    if len(bpy.types.WindowManager.panelSpaces) > 0:
-        return
-    bpy.types.WindowManager.panelSpaces = buildTabDir(allpanels)
+    if len(bpy.types.WindowManager.panelSpaces) == 0:
+        bpy.types.WindowManager.panelSpaces = buildTabDir(allpanels)
 
     btypeslen = len(dir(bpy.types))
     if btypeslen != s.get("bpy_types_len"):
         updatePanels()
     s["bpy_types_len"] = btypeslen
     createSceneTabData()
-    # fixes.fixes() #fixes not needed at all since new release
     s["functions_overwrite_success"] = False
     overrideDrawFunctions()
-    updateDisabling(None, bpy.context)  # needs to be called to register back panels!
+    updateDisabling(None, bpy.context)
+
+    # Timers are cleared on file load — re-register if needed
+    if not bpy.app.timers.is_registered(tab_update_handler):
+        bpy.app.timers.register(tab_update_handler)
 
 
 @persistent
