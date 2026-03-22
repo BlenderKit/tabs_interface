@@ -12,15 +12,11 @@ bl_info = {
 }
 
 import bpy
-import bpy
 import copy  # for deepcopy dicts
 import inspect
 import math
 import os
-import random
 import re
-import string
-import time
 from bpy.app.handlers import persistent
 
 from . import panel_order
@@ -32,7 +28,6 @@ _update_tabs = []
 _update_categories = []
 _extra_activations = []
 USE_DEFAULT_POLL = False  # Pie menu editor compatibility
-_counter = 0
 
 IGNORE_SPACES = ("TOPBAR", "INFO", "PREFERENCES")
 IGNORE_REGIONS = ("HEADER", "NAVIGATION_BAR", "TOOLS", "TOOL_HEADER")
@@ -66,7 +61,7 @@ def smartPoll(cls, context):
         return polled
     # print( ' smart poll', cls.realID)
     item = bpy.context.window_manager.panelData.get(cls.realID)
-    # if item == None:
+    # if item is None:
     #    _update_pdata.append(cls.realID)
     #    return polled
     if prefs.enable_disabling:
@@ -76,14 +71,14 @@ def smartPoll(cls, context):
             return polled
         if prefs.disable_UI and context.region.type == "UI":
             return polled
-    if item == None:
+    if item is None:
         return False
 
     # print('smart poll')
 
     if hasattr(cls, "bl_parent_id"):
         # TODO the parent should be written on initialization
-        parent = eval("bpy.types." + cls.bl_parent_id)
+        parent = getattr(bpy.types, cls.bl_parent_id)
         polled = parent.poll(context) and polled
 
     return (
@@ -454,7 +449,7 @@ def getPanelIDs():
                 continue
 
             # if not (hasattr(tp, 'bl_options') and 'HIDE_HEADER' in tp.bl_options):
-            if s.panelIDs.get(tp.bl_rna.identifier) == None:
+            if s.panelIDs.get(tp.bl_rna.identifier) is None:
                 newIDs.append(tp)
             s.panelIDs[tp.bl_rna.identifier] = tp
             if tp.is_registered != True:
@@ -509,7 +504,7 @@ def buildTabDir(panels):
                 # print((st))
                 # if panel.bl_label == 'Collision':
                 # print('collision in tabdir')
-                if spaces.get(st) == None:
+                if spaces.get(st) is None:
                     spaces[st] = {}  # [panel]
 
                 if hasattr(panel, "bl_region_type"):
@@ -519,7 +514,7 @@ def buildTabDir(panels):
                         rt == "WINDOW" and st == "VIEW_3D"
                     ):
                         # print(rt)
-                        if spaces[st].get(rt) == None:
+                        if spaces[st].get(rt) is None:
                             spaces[st][rt] = []
 
                         # if not hasattr(panel, 'realID'):
@@ -592,7 +587,7 @@ def tabRow(layout):
 
 
 def nextSplit(regwidth=100, width=None, ratio=None, last=0):  # 6 11 27
-    if width != None:
+    if width is not None:
         restw = regwidth - (regwidth * last)
         if width > 0:
             neww = regwidth * last + width
@@ -603,7 +598,7 @@ def nextSplit(regwidth=100, width=None, ratio=None, last=0):  # 6 11 27
             nextsplit = 1 - (-width / regwidth) / (1 - last)
             # print(-width/regwidth, 1-last, nextsplit)
         newtotalsplit = neww / regwidth
-    if ratio != None:
+    if ratio is not None:
         if last < ratio:
             nextsplit = (ratio - last) / (1 - last)
             newtotalsplit = ratio
@@ -678,7 +673,7 @@ def drawTabsLayout(
             tw = getApproximateFontStringWidth(drawtext)
             if enable_hiding and prefs.hiding:
                 tw += iconwidth
-            if i == 0 and tabpanel != None and prefs.enable_folding:
+            if i == 0 and tabpanel is not None and prefs.enable_folding:
                 tw += iconwidth
                 split.prop(
                     tabpanel, "show", icon_only=True, icon="DOWNARROW_HLT", emboss=False
@@ -741,7 +736,7 @@ def drawTabsLayout(
                 lastsplit = split
                 firstrow = row
                 lastsplit_restspace = restspace
-        if lastsplit != None:
+        if lastsplit is not None:
             # split = lastsplit
             # if lastsplit_restspace-iconwidth>0:
             # split = lastsplit.split( factor = (lastsplit_restspace - iconwidth)/lastsplit_restspace, align = False)
@@ -788,7 +783,7 @@ def drawTabsLayout(
 
         # Loop through each tab and construct the grid layout
         for t, id in zip(texts, ids):
-            if tabpanel != None and i == 0 and prefs.enable_folding:
+            if tabpanel is not None and i == 0 and prefs.enable_folding:
                 ratio, lastsplit = nextSplit(regwidth=w, width=iconwidth, last=0)
                 split = row.split(factor=ratio, align=True)
 
@@ -943,7 +938,7 @@ def drawTabs(self, context, plist, tabID):
         return []
     tabpanel_data = s.panelTabData.get(tabID)
     panel_data = s.panelData
-    if tabpanel_data == None:
+    if tabpanel_data is None:
         _update_tabs.append(self)
         return []
 
@@ -981,7 +976,7 @@ def drawTabs(self, context, plist, tabID):
         if hasattr(
             p, "bl_category"
         ):  # and not (p.bl_region_type == 'UI' and p.bl_space_type == 'VIEW_3D'):#additional checks for Archimesh only!
-            if categories.get(p.orig_category) == None:
+            if categories.get(p.orig_category) is None:
                 categories[p.orig_category] = [p]
                 categories_list.append(p.orig_category)
             else:
@@ -996,7 +991,7 @@ def drawTabs(self, context, plist, tabID):
             level = 0
             while hasattr(ppanel, "bl_parent_id"):
                 level += 1
-                ppanel = eval("bpy.types." + ppanel.bl_parent_id)
+                ppanel = getattr(bpy.types, ppanel.bl_parent_id)
 
             draw_panels_levels[level].append(p)
             continue
@@ -1011,7 +1006,7 @@ def drawTabs(self, context, plist, tabID):
             level = 0
             while add_panel and hasattr(ppanel, "bl_parent_id"):
                 level += 1
-                ppanel = eval("bpy.types." + ppanel.bl_parent_id)
+                ppanel = getattr(bpy.types, ppanel.bl_parent_id)
                 add_panel = add_panel and panel_data[ppanel.realID].activated
 
             if add_panel:
@@ -1028,7 +1023,7 @@ def drawTabs(self, context, plist, tabID):
         cdata = []
         categories_ok = True
         for c in categories:
-            if s.categories.get(c) == None:
+            if s.categories.get(c) is None:
                 _update_tabs.append(self)
                 print("categories problem ", categories)
                 categories_ok = False
@@ -1058,7 +1053,7 @@ def drawTabs(self, context, plist, tabID):
             else:
                 active.append(False)
 
-    if top_panel != None:
+    if top_panel is not None:
         top_panel.draw(self, context)
 
     preview = None
@@ -1084,7 +1079,7 @@ def drawTabs(self, context, plist, tabID):
                     enable_hiding=True,
                 )
                 for cat, cname in zip(catops, sorted_categories):
-                    if cat != None:
+                    if cat is not None:
                         cplist = categories[cname]
                         cat.category = cname
                         cat.tabpanel_id = tabID
@@ -1097,7 +1092,7 @@ def drawTabs(self, context, plist, tabID):
             mySeparator(maincol)
 
         category_active_tab = tabpanel_data.get("active_tab_" + active_category)
-        if category_active_tab != None:
+        if category_active_tab is not None:
             active_tab = category_active_tab
             hasactivetab = True
 
@@ -1126,7 +1121,7 @@ def drawTabs(self, context, plist, tabID):
                 while visible and hasattr(ppanel, "bl_parent_id"):
                     level += 1
                     # print( panel_data[ppanel.parent])
-                    ppanel = eval("bpy.types." + ppanel.bl_parent_id)
+                    ppanel = getattr(bpy.types, ppanel.bl_parent_id)
                     # if hasattr(ppanel, 'bl_parent_id'):
                     visible = visible and panel_data[ppanel.realID].activated
 
@@ -1159,7 +1154,7 @@ def drawTabs(self, context, plist, tabID):
                     enable_hiding=False,
                 )
                 for op, p in zip(tabops, tabpanels[level]):
-                    if op != None:
+                    if op is not None:
                         op.panel_id = p.realID
                         op.tabpanel_id = tabID
                         op.category = active_category
@@ -1181,7 +1176,7 @@ def drawTabs(self, context, plist, tabID):
     # print(plist)
     layout.active = True
 
-    if preview != None:
+    if preview is not None:
         preview.draw(self, context)
     return draw_panels
 
@@ -1424,8 +1419,8 @@ def pollTabs(panels, context):
             try:
                 if hasattr(p, "opoll"):
                     polled = p.opoll(context)
-            except:
-                pass  # print ("Unexpected error:", sys.exc_info()[0])
+            except Exception:
+                pass
             # polled = p.opoll(context)
 
         if polled:
@@ -1912,7 +1907,7 @@ class PopupPanel(bpy.types.Operator):
             if hasattr(pt, "poll") and not pt.poll(bpy.context):
                 print("POLL")
                 return
-        except:
+        except Exception:
             print("POLL")
             return
         
@@ -2140,7 +2135,7 @@ class VIEW3D_PT_Transform(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):
-        return bpy.context.active_object != None
+        return bpy.context.active_object is not None
 
     def draw(self, context):
         layout = self.layout
@@ -2323,7 +2318,7 @@ def createSceneTabData():
             p = getattr(bpy.types, pname)
             if (
                 not hasattr(p, "realID")
-                or s.panelData.get(p.realID) == None
+                or s.panelData.get(p.realID) is None
                 or p not in s.panelSpaces[p.bl_space_type][p.bl_region_type]
             ):
                 processpanels.append(p)
@@ -2364,7 +2359,7 @@ def createSceneTabData():
                     p, "bl_category"
                 ):  # and not (p.bl_region_type == 'UI' and p.bl_space_type == 'VIEW_3D'): #additional checks for Archimesh only!
                     c = s.categories.get(p.orig_category)
-                    if c == None:
+                    if c is None:
                         # print(p.orig_category)
                         c = s.categories.add()
                         c.name = p.orig_category
@@ -2379,14 +2374,14 @@ def createSceneTabData():
         # print( s.panelTabData.get(pt.bl_rna.identifier))
         pname = pt.bl_rna.identifier
 
-        if s.panelTabData.get(pname) == None:
+        if s.panelTabData.get(pname) is None:
             item = s.panelTabData.add()
             item.name = pname
 
     while len(_update_categories) > 0:
         cname = _update_categories.pop()
         c = s.categories.get(p.bl_category)
-        if c == None:
+        if c is None:
             c = s.categories.add()
             c.name = cname
 
@@ -2404,7 +2399,7 @@ def createSceneTabData():
 
 def overrideDrawFunctions():
     s = bpy.context.window_manager
-    if s.get("functions_overwrite_success") == None:
+    if s.get("functions_overwrite_success") is None:
         s["functions_overwrite_success"] = False
     if not s["functions_overwrite_success"]:
         try:
@@ -2413,7 +2408,7 @@ def overrideDrawFunctions():
             # bpy.types.OBJECT_PT_constraints.draw = constraintsDraw
             # bpy.types.BONE_PT_constraints.draw = boneConstraintsDraw
             s["functions_overwrite_success"] = True
-        except:
+        except Exception:
             pass
 
 
@@ -2444,7 +2439,7 @@ def tab_update_handler(scene=None):
     s = bpy.context.window_manager
     sc = s.get("tabs_update_counter")
     first = False
-    if sc == None:
+    if sc is None:
         first = True
         sc = s["tabs_update_counter"] = 0
 
