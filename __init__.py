@@ -615,30 +615,12 @@ def nextSplit(regwidth=100, width=None, ratio=None, last=0):  # 6 11 27
 
 
 def getApproximateFontStringWidth(st):
-    ui_scale = bpy.context.preferences.view.ui_scale
-    size = 10
-    for s in st:
-        if s in "i|":
-            size += 2
-        elif s in " ":
-            size += 4
-        elif s in "sfrt":
-            size += 5
-        elif s in "ceghkou":
-            size += 6
-        elif s in "PadnBCST3E":
-            size += 7
-        elif s in "GMODVXYZ":
-            size += 8
-        elif s in "w":
-            size += 9
-        elif s in "m":
-            size += 10
-        else:
-            size += 7
-    # Scale with blender UI scale
-    size = int(size * ui_scale) * 1.6
-    return size  # Convert to picas
+    import blf
+    ui_scale = bpy.context.preferences.view.ui_scale * bpy.context.preferences.system.pixel_size  #blender pixel size
+    font_id = 0  # default Blender UI font
+    blf.size(font_id, round(12 * ui_scale))
+    width, _ = blf.dimensions(font_id, st)
+    return width + round(20 * ui_scale)  # add button padding (both sides)
 
 
 def drawTabsLayout(
@@ -1703,7 +1685,9 @@ class WritePanelOrder(bpy.types.Operator):
     def execute(self, context):
         state_before = {}  # copy.deepcopy(panel_order.spaces)
         ps = bpy.types.WindowManager.panelSpaces
-        f = open("panelSpaces.py", "w")
+        addon_dir = os.path.dirname(os.path.abspath(__file__))
+        panel_order_path = os.path.join(addon_dir, "panel_order.py")
+        f = open(panel_order_path, "w")
         nps = {}
         for s in ps:
             if s not in IGNORE_SPACES:
@@ -1758,8 +1742,9 @@ class WritePanelOrder(bpy.types.Operator):
         ddef = ddef.replace("]},", "]},\n    ")
         ddef = ddef.replace("]}}", "]}}")
 
-        # ddef.replace(',',']ahoj' )
-        f.write(ddef)
+        categories_str = str(panel_order.categories)
+        file_content = f"categories = {categories_str}\n\nspaces = {ddef}\n"
+        f.write(file_content)
         f.close()
         return {"FINISHED"}
 
