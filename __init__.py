@@ -52,18 +52,9 @@ def smartPoll(cls, context):
         return polled
 
     # # print(cls.bl_rna.identifier, cls.bl_label, cls.bl_space_type, cls.bl_region_type, )
-    # if cls.bl_rna.identifier == 'VIEW3D_PT_blenderkit_categories':
-    #     print(cls.bl_rna.identifier, context.region.type, context.area.type, cls.bl_space_type, cls.bl_region_type)
-    # if cls.bl_region_type not in ('UI', 'WINDOW'):  # TOOLS', 'HEADER', 'NAVIGATION_BAR', 'TOOLS', 'TOOL_HEADER'):
-    #     print(cls.bl_rna.identifier, context.region.type, context.area.type, cls.bl_space_type, cls.bl_region_type)
-
     if context.region.type == "TOOL_HEADER":
         return polled
-    # print( ' smart poll', cls.realID)
     item = bpy.context.window_manager.panelData.get(cls.realID)
-    # if item is None:
-    #    _update_pdata.append(cls.realID)
-    #    return polled
     if prefs.enable_disabling:
         if prefs.disable_PROPERTIES and context.area.type == "PROPERTIES":
             return polled
@@ -74,10 +65,7 @@ def smartPoll(cls, context):
     if item is None:
         return False
 
-    # print('smart poll')
-
     if hasattr(cls, "bl_parent_id"):
-        # TODO the parent should be written on initialization
         parent = getattr(bpy.types, cls.bl_parent_id)
         polled = parent.poll(context) and polled
 
@@ -431,11 +419,6 @@ def getPanelIDs():
             tp_name.find("_tabs") == -1 and tp_name not in DONT_USE
         ):  # and tp_name.find('NODE_PT_category_')==-1
             tp = getattr(bpy.types, tp_name)
-            # if hasattr(tp, 'bl_region_type'):
-            #     print('region type', tp.bl_region_type, tp.bl_space_type)
-            # print(' co to je tp?')
-            # print(tp)
-            # print(dir(tp))
             if (
                 tp == panel_tp
                 or not inspect.isclass(tp)
@@ -444,22 +427,13 @@ def getPanelIDs():
                 or hasattr(tp, "bl_region_type")
                 and tp.bl_region_type == "HEADER"
             ):
-                # if hasattr(tp, 'bl_region_type'):
-                #     print('ignored region type', tp.bl_region_type, tp.bl_space_type)
                 continue
 
-            # if not (hasattr(tp, 'bl_options') and 'HIDE_HEADER' in tp.bl_options):
             if s.panelIDs.get(tp.bl_rna.identifier) is None:
                 newIDs.append(tp)
             s.panelIDs[tp.bl_rna.identifier] = tp
             if tp.is_registered != True:
                 print("not registered", tp.bl_label)
-            # else:
-            #    print( 'hide header ###########################', tp.bl_label, tp.bl_rna.identifier)
-        # else:
-        # print('SOMETHING ELSE            ',tp_name)
-
-    # print(tp)
 
     return newIDs
 
@@ -501,11 +475,8 @@ def buildTabDir(panels):
         if hasattr(panel, "bl_space_type"):
             st = panel.bl_space_type
             if st not in IGNORE_SPACES:
-                # print((st))
-                # if panel.bl_label == 'Collision':
-                # print('collision in tabdir')
                 if spaces.get(st) is None:
-                    spaces[st] = {}  # [panel]
+                    spaces[st] = {}
 
                 if hasattr(panel, "bl_region_type"):
 
@@ -513,27 +484,18 @@ def buildTabDir(panels):
                     if rt not in IGNORE_REGIONS and not (
                         rt == "WINDOW" and st == "VIEW_3D"
                     ):
-                        # print(rt)
                         if spaces[st].get(rt) is None:
                             spaces[st][rt] = []
 
-                        # if not hasattr(panel, 'realID'):
                         processPanelForTabs(panel)
-                        # if len(panels)<10:
-                        #    print('newly found panel' , panel)
                         if panel not in spaces[st][rt]:
                             spaces[st][rt].append(panel)
-                            # print(panel)
-                        # print(panel.bl_rna.identifier)
     for sname in spaces:
         space = spaces[sname]
         for rname in space:
             region = space[rname]
             for p in region:
-                # print(p)
-                # print(p.bl_rna.identifier , p.is_registered)
                 if not p.is_registered:
-                    # print('non registered', p)
                     region.remove(p)
     return spaces
 
@@ -548,7 +510,6 @@ def getPanels(getspace, getregion):
     if not hasattr(bpy.types.WindowManager, "panelIDs"):
         updatePanels()
     panels = bpy.types.WindowManager.panelSpaces[getspace][getregion]
-    # print(getspace,getregion,len(panels))
     return panels
 
 
@@ -562,9 +523,6 @@ def layoutActive(self, context):
     layout = self.layout
     layout.active = True
     layout.enabled = True
-    # layout.label('\n\n\n\n\n\n\n\n\n')
-    # for a in range(0,90):
-    #    r = layout.separator()
 
 
 class CarryLayout:
@@ -1106,7 +1064,6 @@ def drawTabs(self, context, plist, tabID):
         tabpanels = [[], [], [], []]
         active = [[], [], [], []]
 
-        # row=tabRow(maincol)
         maxlevel = 0
         for p in plist:
 
@@ -1116,13 +1073,10 @@ def drawTabs(self, context, plist, tabID):
                 visible = True
 
                 level = 0
-                # check if parents are all activated:
                 ppanel = p
                 while visible and hasattr(ppanel, "bl_parent_id"):
                     level += 1
-                    # print( panel_data[ppanel.parent])
                     ppanel = getattr(bpy.types, ppanel.bl_parent_id)
-                    # if hasattr(ppanel, 'bl_parent_id'):
                     visible = visible and panel_data[ppanel.realID].activated
 
                 maxlevel = max(maxlevel, level)
@@ -1132,15 +1086,12 @@ def drawTabs(self, context, plist, tabID):
                     tabpanels[level].append(p)
                     tdata[level].append(panel_data[p.realID])
                     active[level].append(panel_data[p.realID].activated)
-        # print(texts)
-        # Draw all tabs including subtabs. Maaaadneeeesss.
         if tabpanel_data.show:
             if len(categories) == 1:
                 tabpanel = tabpanel_data
             else:
                 tabpanel = None
             for level in range(0, maxlevel + 1):
-                # print(f'drawing level {level} from {maxlevel}')
                 tabops = drawTabsLayout(
                     self,
                     context,
@@ -1162,18 +1113,12 @@ def drawTabs(self, context, plist, tabID):
                 if level < maxlevel:
                     mySeparator(maincol)
 
-    if (
-        len(draw_panels) == 0 and len(plist) > 0
-    ):  # and len(categories)== 1)or (len(categories)=>1 and len ) :# or (len(draw_panels == 0) and len(plist)>0):
-        # if len(categories)>0:
-        # print('ujoj')
+    if len(draw_panels) == 0 and len(plist) > 0:
         p = plist[0]
-        # print(draw_panels)
         if p not in draw_panels:
             draw_panels.append(p)
             _extra_activations.append(p)
 
-    # print(plist)
     layout.active = True
 
     if preview is not None:
@@ -1311,9 +1256,6 @@ def boneConstraintsDraw(self, context):
             prefs.enable_disabling and prefs.disable_MODIFIERS
         ):
             maincol = layout.column(align=True)
-            # active_constraint = pb.active_constraint
-            # if not pb.active_constraint in pb.constraints:
-            #    active_constraints = [pb.constraints[0].name]
 
             hasactive = False
             for con in pb.active_constraints:
@@ -1358,7 +1300,6 @@ def boneConstraintsDraw(self, context):
 
 def drawPanels(self, context, draw_panels):
     layout = self.layout
-    # print(draw_panels)
 
     for drawPanel in draw_panels:
 
@@ -1396,13 +1337,8 @@ def drawPanels(self, context, draw_panels):
         # these are various functions defined all around blender for panels. We need them to draw the panel inside the tab panel
 
         if hasattr(drawPanel, "draw"):
-            # layoutActive(self,context) bpy.types.VIEW3D_PT_weight_palette(bpy.context.window_manager)
             pInstance = drawPanel(bpy.context.window_manager)
-
-            # arg_spec = inspect.getargspec(pInstance.draw)
-            # print(arg_spec.args)
             pInstance.layout = layout
-            # p.draw(bpy.context)
             drawPanel.draw(pInstance, context)
         layoutActive(self, context)
 
@@ -1421,50 +1357,32 @@ def pollTabs(panels, context):
                     polled = p.opoll(context)
             except Exception:
                 pass
-            # polled = p.opoll(context)
 
         if polled:
             draw_plist.append(p)
-            # print('polled', len(panels), len(draw_plist))
     return draw_plist
 
 
 def getFilteredTabs(self, context):
-    # getspace = self.bl_space_type
     getspace = context.area.type
-    # getregion = self.bl_region_type
     getregion = context.region.type
     tab_panel_category = ""
     if hasattr(self, "bl_category"):
         tab_panel_category = self.bl_category
     panellist = getPanels(getspace, getregion)
-    # print (panellist)
-    tabpanel = self  # eval('bpy.types.' + tabID)
-    # print (bpy.types.PHYSICS_PT_collision in panellist)
+    tabpanel = self
 
     possible_tabs = []
     possible_tabs_wider = []
     categories = []
-    # print(panellist)
     for panel in panellist:
-        # if panel.bl_label =='Options' and hasattr(panel, 'bl_context'):
-        #    print('got hrere')
-        #   print(panel.bl_context, panel.bl_category)
-        # if panel.realID =='VIEW3D_PT_tools_mask_texture':
-        #    print('its here!!!! before filter')
-        # if panel.bl_label == 'Collision':
-        # print('collision in filterfunc')
-        # print(getspace, getregion, panellist)
         if not hasattr(panel, "bl_label"):
             print("not a panel", panel)
 
-        else:  # panel.bl_label!= '':# and panel.bl_label!= 'Influence' and panel.bl_label!= 'Mapping': #these were crashing. not anymore.
+        else:
             polled = True
-            if (
-                not panel.is_registered
-            ):  # somehow it can happen between updates, so putting this here too.
+            if not panel.is_registered:  # somehow it can happen between updates
                 polled = False
-            # first  filter context and category before doing eval and getting actual panel object. still using  fo data.
             if hasattr(panel, "bl_context"):
                 pctx = panel.bl_context.upper()
                 if panel.bl_context == "particle":  # property particle panels
@@ -1875,57 +1793,6 @@ class ActivateCategory(bpy.types.Operator):
             else:
                 pdata.activated_category = False
         return self.execute(context)
-
-
-# class testContext(bpy.types.Operator):
-#     """ panel order utility"""
-#     bl_idname = 'wm.test_context'
-#     bl_label = 'Test context'
-#     bl_options = {'REGISTER'}
-#
-#     def execute(self, context):
-#         print('test context')
-#         print(dir(context))
-#         print(bpy.types.VIEW3D_PT_blenderkit_unified.poll(context))
-#         return {'FINISHED'}
-
-"""        
-class PopupPanel(bpy.types.Operator):
-    bl_idname = 'wm.popup_panel'
-    bl_label = 'popup_panel'
-    bl_options = {'REGISTER'}
-    
-    
-    tabpanel_id : bpy.props.StringProperty(name="tab panel name",
-                default='PROPERTIES_PT_tabs')
-    panel_id : bpy.props.StringProperty(name="panel name",
-                default='')
-    
-     
-    def draw_panel(self, layout, pt):
-        try:
-            if hasattr(pt, "poll") and not pt.poll(bpy.context):
-                print("POLL")
-                return
-        except Exception:
-            print("POLL")
-            return
-        
-        p = pt(bpy.context.window_manager)
-        p.layout = layout.box()
-        p.draw(bpy.context)
-       
- 
-    def draw(self, context):
-        layout = self.layout
-        self.draw_panel(layout, tp)
- 
-    def execute(self, context):
-        return {'FINISHED'}
- 
-    def invoke(self, context, event):
-        return context.window_manager.invoke_popup(self)
- """
 
 
 class ActivateModifier(bpy.types.Operator):
@@ -2466,11 +2333,6 @@ def tab_update_handler(scene=None):
 
 
 def register():
-    # bpy.utils.register_class(VIEW3D_PT_Transform)#we need this panel :()
-    # bpy.utils.register_class(VIEW3D_PT_transform)#we need this panel :()
-
-    # disable later, just for testing:
-    # bpy.utils.register_class(testContext)
     bpy.utils.register_class(tabSetups)
     bpy.utils.register_class(panelData)
     bpy.utils.register_class(tabCategoryData)
@@ -2480,7 +2342,6 @@ def register():
     bpy.utils.register_class(WritePanelOrder)
     bpy.utils.register_class(ActivatePanel)
     bpy.utils.register_class(ActivateCategory)
-    # bpy.utils.register_class(PopupPanel)
     bpy.utils.register_class(ActivateModifier)
     bpy.utils.register_class(ActivateConstraint)
     bpy.utils.register_class(ActivatePoseBoneConstraint)
@@ -2508,23 +2369,15 @@ def register():
     allpanels = getPanelIDs()
     bpy.types.WindowManager.panelSpaces = buildTabDir(allpanels)
 
-    # build the classess here!!
     definitions, panelIDs = createPanels()
     for d in definitions:
-        # print(d)
         exec(d)
     for pname in panelIDs:
-        # print('register ', pname)
-        # print(pname)
         p = eval(pname)
-        # print(dir(p))
         bpy.utils.register_class(eval(pname))
-
-        # pt = eval('bpy.types.'+pname)
 
 
 def unregister():
-    # first, fix the panels:
     for panel in bpy.types.WindowManager.panelIDs:
 
         if hasattr(panel, "bl_category"):
@@ -2533,15 +2386,10 @@ def unregister():
 
         fixOriginalPanel(panel)
 
-    # bpy.utils.unregister_class(VIEW3D_PT_Transform)
-    # bpy.utils.unregister_class(VIEW3D_PT_transform)
-
     definitions, panelIDs = createPanels()
     for d in definitions:
-        # print(d)
         exec(d)
     for pname in panelIDs:
-        # print('unregister ', pname)
         if hasattr(bpy.types, pname):
             bpy.utils.unregister_class(getattr(bpy.types, pname))
 
@@ -2550,7 +2398,6 @@ def unregister():
     bpy.utils.unregister_class(WritePanelOrder)
     bpy.utils.unregister_class(ActivatePanel)
     bpy.utils.unregister_class(ActivateCategory)
-    # bpy.utils.unregister_class(PopupPanel)
     bpy.utils.unregister_class(ActivateModifier)
     bpy.utils.unregister_class(ActivateConstraint)
     bpy.utils.unregister_class(ActivatePoseBoneConstraint)
@@ -2569,5 +2416,3 @@ def unregister():
 
 if __name__ == "__main__":
     register()
-
-    # https://github.com/meta-androcto/blenderpython/tree/master/scripts/addons_extern/AF_view3d_mod https://github.com/meta-androcto/blenderpython/tree/master/scripts/addons_extern/AF_view3d_toolbar_mod
