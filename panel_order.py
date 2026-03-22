@@ -497,7 +497,6 @@ spaces = {'PROPERTIES': {'WINDOW': [
     'RENDER_PT_stamp_note',
     'RENDER_PT_stereoscopy',
     'SCENE_PT_simulation',
-    'SCENE_PT_simulation',
     'RENDER_PT_time_stretching',
     'SCENE_PT_keying_sets',
     'SCENE_PT_rigid_body_world',

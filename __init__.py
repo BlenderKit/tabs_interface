@@ -1126,6 +1126,26 @@ def drawTabs(self, context, plist, tabID):
     return draw_panels
 
 
+def _resolve_active_names(items, active_names):
+    """Return active_names if any are still present in items, else fall back to the first item."""
+    if any(name in items for name in active_names):
+        return active_names
+    return [items[0].name]
+
+
+def _draw_item_tabs(self, context, maincol, items, active_names, operator_name, name_attr):
+    """Draw a tab row for items and assign name_attr on each returned operator."""
+    names = items.keys()
+    active = [item.name in active_names for item in items]
+    tabops = drawTabsLayout(
+        self, context, maincol,
+        operator_name=operator_name,
+        texts=names, ids=names, active=active,
+    )
+    for op, name in zip(tabops, names):
+        setattr(op, name_attr, name)
+
+
 def modifiersDraw(self, context):
     prefs = bpy.context.preferences.addons[__package__].preferences
     ob = context.object
@@ -1137,37 +1157,14 @@ def modifiersDraw(self, context):
         ):
             maincol = layout.column(align=True)
 
-            hasactive = False
-            for am in ob.active_modifiers:
-                if am in ob.modifiers:
-                    hasactive = True
-                else:
+            for am in list(ob.active_modifiers):
+                if am not in ob.modifiers:
                     ob.active_modifiers.remove(am)
-            active_modifiers = ob.active_modifiers
-            if not hasactive:
-                active_modifiers = [ob.modifiers[0].name]
+            active_modifiers = _resolve_active_names(ob.modifiers, ob.active_modifiers)
 
             if len(ob.modifiers) > 1:
-                names = ob.modifiers.keys()
-                active = []
-                for m in ob.modifiers:
-                    if m.name in active_modifiers:
-                        active.append(True)
-                    else:
-                        active.append(False)
-
-                tabops = drawTabsLayout(
-                    self,
-                    context,
-                    maincol,
-                    operator_name="object.activate_modifier",
-                    texts=names,
-                    ids=names,
-                    active=active,
-                )
-                for op, mname in zip(tabops, names):
-                    op.modifier_name = mname
-
+                _draw_item_tabs(self, context, maincol, ob.modifiers, active_modifiers,
+                                "object.activate_modifier", "modifier_name")
                 mySeparator(maincol)
             for md in ob.modifiers:
                 if md.name in active_modifiers:
@@ -1183,13 +1180,11 @@ def modifiersDraw(self, context):
 
 def constraintsDraw(self, context):
     prefs = bpy.context.preferences.addons[__package__].preferences
-
     ob = context.object
-
     layout = self.layout
     if ob.type == "ARMATURE" and ob.mode == "POSE":
         box = layout.box()
-        box.alert = True  # XXX: this should apply to the box background
+        box.alert = True
         box.label(icon="INFO", text="Constraints for active bone do not live here")
         box.operator(
             "wm.properties_context_change",
@@ -1205,37 +1200,10 @@ def constraintsDraw(self, context):
             prefs.enable_disabling and prefs.disable_MODIFIERS
         ):
             maincol = layout.column(align=True)
-
-            hasactive = False
-            for con in ob.active_constraints:
-                if con in ob.constraints:
-                    hasactive = True
-
-            active_constraints = ob.active_constraints
-            if not hasactive:
-                active_constraints = [ob.constraints[0].name]
-
+            active_constraints = _resolve_active_names(ob.constraints, ob.active_constraints)
             if len(ob.constraints) > 1:
-
-                active = []
-                for con in ob.constraints:
-                    if con.name in active_constraints:
-                        active.append(True)
-                    else:
-                        active.append(False)
-
-                names = ob.constraints.keys()
-                tabops = drawTabsLayout(
-                    self,
-                    context,
-                    maincol,
-                    operator_name="object.activate_constraint",
-                    texts=names,
-                    ids=names,
-                    active=active,
-                )
-                for op, cname in zip(tabops, names):
-                    op.constraint_name = cname
+                _draw_item_tabs(self, context, maincol, ob.constraints, active_constraints,
+                                "object.activate_constraint", "constraint_name")
             for con in ob.constraints:
                 if con.name in active_constraints:
                     self.draw_constraint(context, con)
@@ -1246,50 +1214,18 @@ def constraintsDraw(self, context):
 
 def boneConstraintsDraw(self, context):
     prefs = bpy.context.preferences.addons[__package__].preferences
-
     pb = context.pose_bone
     layout = self.layout
     layout.operator_menu_enum("pose.constraint_add", "type", text="Add Bone Constraint")
-
     if len(pb.constraints) > 0:
         if not prefs.enable_disabling or not (
             prefs.enable_disabling and prefs.disable_MODIFIERS
         ):
             maincol = layout.column(align=True)
-
-            hasactive = False
-            for con in pb.active_constraints:
-                if con in pb.constraints:
-                    hasactive = True
-
-            active_constraints = pb.active_constraints
-            if not hasactive:
-                active_constraints = [pb.constraints[0].name]
-
+            active_constraints = _resolve_active_names(pb.constraints, pb.active_constraints)
             if len(pb.constraints) > 1:
-                maincol = layout.column(align=True)
-
-                active = []
-                for c in pb.constraints:
-                    if c.name in active_constraints:
-                        active.append(True)
-                    else:
-                        active.append(False)
-
-                if len(pb.constraints) > 1:
-                    names = pb.constraints.keys()
-                    # tabops= drawTabsLayout(maincol, context,  operator_name = 'object.activate_constraint', texts = names, ids = names, active = active_constraint)
-                    tabops = drawTabsLayout(
-                        self,
-                        context,
-                        maincol,
-                        operator_name="object.activate_posebone_constraint",
-                        texts=names,
-                        ids=names,
-                        active=active,
-                    )
-                    for op, cname in zip(tabops, names):
-                        op.constraint_name = cname
+                _draw_item_tabs(self, context, maincol, pb.constraints, active_constraints,
+                                "object.activate_posebone_constraint", "constraint_name")
             for con in pb.constraints:
                 if con.name in active_constraints:
                     self.draw_constraint(context, con)
@@ -1302,11 +1238,6 @@ def drawPanels(self, context, draw_panels):
     layout = self.layout
 
     for drawPanel in draw_panels:
-
-        # not needed anymore, new drawing from instance ;)
-        # for var in dir(drawPanel):
-        #    if var not in DEFAULT_PANEL_PROPS:
-        #        exec('self.'+var +' = drawPanel.' + var)
         if drawPanel.bl_label != "":
             box = layout.box()
             box.scale_y = 1
