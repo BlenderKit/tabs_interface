@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Tabs interface",
     "author": "Vilem Duha",
-    "version": (3, 0),
+    "version": (4, 0),
     "blender": (4, 5, 0),
     "location": "Everywhere(almost)",
     "description": "Blender tabbed.",
@@ -200,7 +200,9 @@ def processPanelForTabs(panel):
 def fixOriginalPanel(tp_name):
     """brings panel to state before tabs"""
 
-    tp = getattr(bpy.types, tp_name)
+    tp = getattr(bpy.types, tp_name, None)
+    if tp is None:
+        return  # panel was unregistered externally (e.g. Cycles disabled)
     bpy.utils.unregister_class(tp)
     if hasattr(tp, "opoll"):
         tp.poll = tp.opoll
@@ -403,6 +405,25 @@ DONT_USE = [
 ]
 
 
+def _has_instanced_ancestor(tp):
+    """Return True if tp or any of its bl_parent_id ancestors is INSTANCED."""
+    visited = set()
+    current = tp
+    while current is not None:
+        name = getattr(current, "bl_rna", None)
+        name = name.identifier if name else repr(current)
+        if name in visited:
+            break
+        visited.add(name)
+        if hasattr(current, "bl_options") and "INSTANCED" in current.bl_options:
+            return True
+        parent_id = getattr(current, "bl_parent_id", None)
+        if parent_id is None:
+            break
+        current = getattr(bpy.types, parent_id, None)
+    return False
+
+
 def getPanelIDs():
     """rebuilds panel ID's dictionary"""
     s = bpy.types.WindowManager
@@ -426,8 +447,7 @@ def getPanelIDs():
                 or tp.bl_space_type == "PREFERENCES"
                 or hasattr(tp, "bl_region_type")
                 and tp.bl_region_type == "HEADER"
-                or hasattr(tp, "bl_options")
-                and "INSTANCED" in tp.bl_options
+                or _has_instanced_ancestor(tp)
             ):
                 continue
 
@@ -464,10 +484,7 @@ def buildTabDir(panels):
                             if type(p) == str:
                                 panel = getattr(bpy.types, p, None)
                                 if panel:
-                                    if p in DONT_USE or (
-                                        hasattr(panel, "bl_options")
-                                        and "INSTANCED" in panel.bl_options
-                                    ):
+                                    if p in DONT_USE or _has_instanced_ancestor(panel):
                                         continue
                                     processPanelForTabs(panel)
                                     nregion.append(panel)
@@ -576,11 +593,11 @@ def nextSplit(regwidth=100, width=None, ratio=None, last=0):  # 6 11 27
 
 def getApproximateFontStringWidth(st):
     import blf
-    ui_scale = bpy.context.preferences.view.ui_scale * bpy.context.preferences.system.pixel_size  #blender pixel size
-    font_id = 0  # default Blender UI font
-    blf.size(font_id, round(15 * ui_scale))
+    ui_scale = bpy.context.preferences.view.ui_scale * bpy.context.preferences.system.pixel_size 
+    font_id = 0
+    blf.size(font_id, round(11 * ui_scale))
     width, _ = blf.dimensions(font_id, st)
-    return width + round(20 * ui_scale)  # add button padding (both sides)
+    return width + round(20 * ui_scale)
 
 
 def drawTabsLayout(
@@ -598,9 +615,9 @@ def drawTabsLayout(
     """Creates and draws actual layout of tabs"""
 
     # Fetch preferences and calculate initial layout dimensions
-    ui_scale = context.preferences.view.ui_scale
+    ui_scale = context.preferences.view.ui_scale * context.preferences.system.pixel_size
     prefs = bpy.context.preferences.addons[__package__].preferences
-    w = context.region.width  # width of the region
+    w = context.region.width  # width of the region (physical pixels on Mac Retina)
     margin = int(18 * ui_scale)
     if prefs.box:
         margin += int(10 * ui_scale)
@@ -617,7 +634,6 @@ def drawTabsLayout(
     if not prefs.fixed_width:  # DYNAMIC layout
         baserest = w - margin
         restspace = baserest
-
         # Variables for tab width and alignment
         tw = 0
         splitalign = True
@@ -651,7 +667,6 @@ def drawTabsLayout(
             restspace = restspace - tw
 
             if restspace > 0:
-
                 split = split.split(factor=tw / oldrestspace, align=splitalign)
 
             else:
@@ -708,7 +723,7 @@ def drawTabsLayout(
     else:  # Fixed width (grid) layout
         # Calculate tab width and number of columns
         w = w - margin
-        wtabcount = math.floor(w / 80)
+        wtabcount = math.floor(w / round(80 * ui_scale))
         if wtabcount == 0:
             wtabcount = 1
 
@@ -1117,6 +1132,20 @@ def drawTabs(self, context, plist, tabID):
 
                 if level < maxlevel:
                     mySeparator(maincol)
+
+    # If a Properties-area search filter is active, also show panels whose
+    # label matches the search string (in addition to whatever was already active).
+    search_filter = ""
+    try:
+        if hasattr(context.space_data, "search_filter"):
+            search_filter = context.space_data.search_filter or ""
+    except Exception:
+        pass
+    if search_filter:
+        needle = search_filter.lower()
+        for p in plist:
+            if needle in p.bl_label.lower() and p not in draw_panels:
+                draw_panels.append(p)
 
     if len(draw_panels) == 0 and len(plist) > 0:
         p = plist[0]
