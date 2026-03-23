@@ -556,18 +556,15 @@ class CarryLayout:
 
 class _IconOnlyLayout:
     """Wraps a UILayout and forces all prop() calls to icon_only=True, text=''.
-    Used to render panel draw_header checkboxes compactly inside tab buttons.
-    tab_active controls emboss to match the adjacent tab button."""
+    Used to render panel draw_header checkboxes compactly inside tab buttons."""
 
-    def __init__(self, layout, tab_active=False, prefs_emboss=True):
+    def __init__(self, layout):
         self._layout = layout
-        self._tab_active = tab_active
-        self._prefs_emboss = prefs_emboss
 
     def prop(self, data, property, *args, **kwargs):
         kwargs["icon_only"] = True
         kwargs["text"] = ""
-        kwargs["emboss"] = self._prefs_emboss if self._tab_active else not self._prefs_emboss
+        kwargs["emboss"] = True
         return self._layout.prop(data, property, *args, **kwargs)
 
     def __getattr__(self, name):
@@ -723,7 +720,7 @@ def drawTabsLayout(
                         inner = split.row(align=True)
                         icon_split = inner.split(factor=iconwidth / tw, align=True)
                         try:
-                            header_draws[i](CarryLayout(_IconOnlyLayout(icon_split, tab_active=active[i], prefs_emboss=prefs.emboss)), context)
+                            header_draws[i](CarryLayout(_IconOnlyLayout(icon_split)), context)
                         except Exception:
                             pass
                         op_layout = icon_split.split(align=True)
@@ -846,7 +843,7 @@ def drawTabsLayout(
                             cell_width = max(w / wtabcount, iconwidth + 1)
                             icon_split = inner.split(factor=iconwidth / cell_width, align=True)
                             try:
-                                header_draws[i](CarryLayout(_IconOnlyLayout(icon_split, tab_active=active[i], prefs_emboss=prefs.emboss)), context)
+                                header_draws[i](CarryLayout(_IconOnlyLayout(icon_split)), context)
                             except Exception:
                                 pass
                             op_layout = icon_split.split(align=True)
