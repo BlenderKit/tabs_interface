@@ -554,6 +554,26 @@ class CarryLayout:
         self.layout = layout
 
 
+class _IconOnlyLayout:
+    """Wraps a UILayout and forces all prop() calls to icon_only=True, text=''.
+    Used to render panel draw_header checkboxes compactly inside tab buttons.
+    tab_active controls emboss to match the adjacent tab button."""
+
+    def __init__(self, layout, tab_active=False, prefs_emboss=True):
+        self._layout = layout
+        self._tab_active = tab_active
+        self._prefs_emboss = prefs_emboss
+
+    def prop(self, data, property, *args, **kwargs):
+        kwargs["icon_only"] = True
+        kwargs["text"] = ""
+        kwargs["emboss"] = self._prefs_emboss if self._tab_active else not self._prefs_emboss
+        return self._layout.prop(data, property, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._layout, name)
+
+
 def drawNone(self, context):
     pass
 
@@ -591,7 +611,8 @@ def nextSplit(regwidth=100, width=None, ratio=None, last=0):  # 6 11 27
     return nextsplit, newtotalsplit
 
 
-def getApproximateFontStringWidth(st):
+def getFontStringWidth(st):
+    # get font string width in physical pixels
     import blf
     ui_scale = bpy.context.preferences.view.ui_scale * bpy.context.preferences.system.pixel_size 
     font_id = 0
@@ -611,6 +632,7 @@ def drawTabsLayout(
     tdata=[],
     active="",
     enable_hiding=False,
+    header_draws=None,
 ):  # tdata=[],
     """Creates and draws actual layout of tabs"""
 
@@ -646,12 +668,19 @@ def drawTabsLayout(
 
         # Iterate through each tab
         for t, id in zip(texts, ids):
+            has_header = (
+                header_draws is not None
+                and i < len(header_draws)
+                and header_draws[i] is not None
+            )
             # Calculate tab width and adjust layout accordingly
             if prefs.emboss and restspace != baserest:
-                drawtext = "| " + t
+                drawtext = t + " |"
             else:
                 drawtext = t
-            tw = getApproximateFontStringWidth(drawtext)
+            tw = getFontStringWidth(drawtext)
+            if has_header:
+                tw += iconwidth
             if enable_hiding and prefs.hiding:
                 tw += iconwidth
             if i == 0 and tabpanel is not None and prefs.enable_folding:
@@ -671,7 +700,9 @@ def drawTabsLayout(
 
             else:
                 drawtext = t
-                tw = getApproximateFontStringWidth(drawtext)
+                tw = getFontStringWidth(drawtext)
+                if has_header:
+                    tw += iconwidth
                 if (
                     rows == 0 and enable_hiding and prefs.show_hiding_icon
                 ):  # draw hiding mode icon here
@@ -688,15 +719,31 @@ def drawTabsLayout(
                 oplist.append(None)
             else:
                 if not enable_hiding or tdata[i].show:
-
-                    if active[i]:
-                        op = split.operator(
-                            operator_name, text=drawtext, emboss=prefs.emboss
-                        )
+                    if has_header:
+                        inner = split.row(align=True)
+                        icon_split = inner.split(factor=iconwidth / tw, align=True)
+                        try:
+                            header_draws[i](CarryLayout(_IconOnlyLayout(icon_split, tab_active=active[i], prefs_emboss=prefs.emboss)), context)
+                        except Exception:
+                            pass
+                        op_layout = icon_split.split(align=True)
+                        if active[i]:
+                            op = op_layout.operator(
+                                operator_name, text=drawtext, emboss=prefs.emboss
+                            )
+                        else:
+                            op = op_layout.operator(
+                                operator_name, text=drawtext, emboss=not prefs.emboss
+                            )
                     else:
-                        op = split.operator(
-                            operator_name, text=drawtext, emboss=not prefs.emboss
-                        )
+                        if active[i]:
+                            op = split.operator(
+                                operator_name, text=drawtext, emboss=prefs.emboss
+                            )
+                        else:
+                            op = split.operator(
+                                operator_name, text=drawtext, emboss=not prefs.emboss
+                            )
                     oplist.append(op)
                 else:
                     oplist.append(None)
@@ -783,23 +830,46 @@ def drawTabsLayout(
 
                 drawn = False
 
+                has_header = (
+                    header_draws is not None
+                    and i < len(header_draws)
+                    and header_draws[i] is not None
+                )
                 if enable_hiding and prefs.hiding:
                     split.prop(tdata[i], "show", text=t)
                     drawn = True
                 else:
                     if not enable_hiding or tdata[i].show:
-
-                        if active[i]:
-                            op = split.operator(
-                                operator_name, text=t, icon="NONE", emboss=prefs.emboss
-                            )
+                        if has_header:
+                            # inner row keeps the outer split chain intact for the grid.
+                            inner = split.row(align=True)
+                            cell_width = max(w / wtabcount, iconwidth + 1)
+                            icon_split = inner.split(factor=iconwidth / cell_width, align=True)
+                            try:
+                                header_draws[i](CarryLayout(_IconOnlyLayout(icon_split, tab_active=active[i], prefs_emboss=prefs.emboss)), context)
+                            except Exception:
+                                pass
+                            op_layout = icon_split.split(align=True)
+                            if active[i]:
+                                op = op_layout.operator(
+                                    operator_name, text=t, icon="NONE", emboss=prefs.emboss
+                                )
+                            else:
+                                op = op_layout.operator(
+                                    operator_name, text=t, icon="NONE", emboss=not prefs.emboss
+                                )
                         else:
-                            op = split.operator(
-                                operator_name,
-                                text=t,
-                                icon="NONE",
-                                emboss=not prefs.emboss,
-                            )
+                            if active[i]:
+                                op = split.operator(
+                                    operator_name, text=t, icon="NONE", emboss=prefs.emboss
+                                )
+                            else:
+                                op = split.operator(
+                                    operator_name,
+                                    text=t,
+                                    icon="NONE",
+                                    emboss=not prefs.emboss,
+                                )
                         oplist.append(op)
                         drawn = True
                 if ratio != 1:
@@ -1080,6 +1150,7 @@ def drawTabs(self, context, plist, tabID):
         tdata = [[], [], [], []]
         tabpanels = [[], [], [], []]
         active = [[], [], [], []]
+        header_draws = [[], [], [], []]
 
         maxlevel = 0
         for p in plist:
@@ -1106,6 +1177,9 @@ def drawTabs(self, context, plist, tabID):
                     tabpanels[level].append(p)
                     tdata[level].append(panel_data[p.realID])
                     active[level].append(panel_data[p.realID].activated)
+                    header_draws[level].append(
+                        getattr(p, "orig_draw_header", None)
+                    )
         if tabpanel_data.show:
             if len(categories) == 1:
                 tabpanel = tabpanel_data
@@ -1123,6 +1197,7 @@ def drawTabs(self, context, plist, tabID):
                     tdata=tdata[level],
                     active=active[level],
                     enable_hiding=False,
+                    header_draws=header_draws[level],
                 )
                 for op, p in zip(tabops, tabpanels[level]):
                     if op is not None:
@@ -1679,6 +1754,16 @@ class ActivatePanel(bpy.types.Operator):
             item.activated = False
         else:
             item.activated = True
+            # Auto-activate first child subtab when the parent has children but
+            # none of them are currently active (handles empty-draw parent panels).
+            children = [
+                p for p in plist
+                if getattr(p, "bl_parent_id", None) == self.panel_id
+                and hasattr(p, "realID")
+                and s.panelData.get(p.realID) is not None
+            ]
+            if children and not any(s.panelData[c.realID].activated for c in children):
+                s.panelData[children[0].realID].activated = True
             # this is also allready obsolete? not yet so much?
             # if self.category!= '':
             #    s.panelTabData[self.tabpanel_id]['active_tab_'+self.category] = self.panel_id
