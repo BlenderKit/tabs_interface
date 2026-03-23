@@ -847,14 +847,30 @@ def drawTabsLayout(
                             except Exception:
                                 pass
                             op_layout = icon_split.split(align=True)
-                            if active[i]:
-                                op = op_layout.operator(
-                                    operator_name, text=t, icon="NONE", emboss=prefs.emboss
-                                )
+                            # Mirror the left checkbox with an invisible spacer on the right
+                            # so the label text stays centered in the cell.
+                            remaining = cell_width - iconwidth
+                            if remaining > iconwidth:
+                                center_factor = (remaining - iconwidth) / remaining
+                                center_split = op_layout.split(factor=center_factor, align=True)
+                                if active[i]:
+                                    op = center_split.operator(
+                                        operator_name, text=t, icon="NONE", emboss=prefs.emboss
+                                    )
+                                else:
+                                    op = center_split.operator(
+                                        operator_name, text=t, icon="NONE", emboss=not prefs.emboss
+                                    )
+                                center_split.split(align=True).label(text="", icon="NONE")
                             else:
-                                op = op_layout.operator(
-                                    operator_name, text=t, icon="NONE", emboss=not prefs.emboss
-                                )
+                                if active[i]:
+                                    op = op_layout.operator(
+                                        operator_name, text=t, icon="NONE", emboss=prefs.emboss
+                                    )
+                                else:
+                                    op = op_layout.operator(
+                                        operator_name, text=t, icon="NONE", emboss=not prefs.emboss
+                                    )
                         else:
                             if active[i]:
                                 op = split.operator(
