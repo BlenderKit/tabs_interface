@@ -46,19 +46,19 @@ def yesPoll(cls, context):
 @classmethod
 def smartPoll(cls, context):
     prefs = bpy.context.preferences.addons[__package__].preferences
-    polled = cls.opoll(context)
+    try:
+        polled = cls.opoll(context)
+    except Exception:
+        return False  # original poll crashed — panel doesn't belong in this context
 
     if USE_DEFAULT_POLL:
         return polled
 
-    # # print(cls.bl_rna.identifier, cls.bl_label, cls.bl_space_type, cls.bl_region_type, )
     if context.region.type == "TOOL_HEADER":
         return polled
     item = bpy.context.window_manager.panelData.get(cls.realID)
     if prefs.enable_disabling:
         if prefs.disable_PROPERTIES and context.area.type == "PROPERTIES":
-            return polled
-        if prefs.disable_TOOLBAR and context.region.type == "TOOLS":
             return polled
         if prefs.disable_UI and context.region.type == "UI":
             return polled
@@ -426,6 +426,8 @@ def getPanelIDs():
                 or tp.bl_space_type == "PREFERENCES"
                 or hasattr(tp, "bl_region_type")
                 and tp.bl_region_type == "HEADER"
+                or hasattr(tp, "bl_options")
+                and "INSTANCED" in tp.bl_options
             ):
                 continue
 
@@ -462,6 +464,11 @@ def buildTabDir(panels):
                             if type(p) == str:
                                 panel = getattr(bpy.types, p, None)
                                 if panel:
+                                    if p in DONT_USE or (
+                                        hasattr(panel, "bl_options")
+                                        and "INSTANCED" in panel.bl_options
+                                    ):
+                                        continue
                                     processPanelForTabs(panel)
                                     nregion.append(panel)
                                 else:
@@ -571,7 +578,7 @@ def getApproximateFontStringWidth(st):
     import blf
     ui_scale = bpy.context.preferences.view.ui_scale * bpy.context.preferences.system.pixel_size  #blender pixel size
     font_id = 0  # default Blender UI font
-    blf.size(font_id, round(12 * ui_scale))
+    blf.size(font_id, round(15 * ui_scale))
     width, _ = blf.dimensions(font_id, st)
     return width + round(20 * ui_scale)  # add button padding (both sides)
 
@@ -637,11 +644,6 @@ def drawTabsLayout(
                     tabpanel, "show", icon_only=True, icon="DOWNARROW_HLT", emboss=False
                 )
 
-            if (
-                context.space_data.type == "VIEW_3D" and context.region.type == "TOOLS"
-            ):  # TOOLBAR draws differnt buttons...
-                tw += 10
-
             if enable_hiding and not prefs.hiding and not tdata[i].show:
                 tw = 0
 
@@ -660,11 +662,6 @@ def drawTabsLayout(
                 ):  # draw hiding mode icon here
                     if prefs.hiding:
                         tw += iconwidth
-                if (
-                    context.space_data.type == "VIEW_3D"
-                    and context.region.type == "TOOLS"
-                ):  # TOOLBAR draws differnt buttons...
-                    tw += 10  # tw +=15
                 rows += 1
                 oldrestspace = baserest
                 restspace = baserest - tw
@@ -919,16 +916,18 @@ def drawTabs(self, context, plist, tabID):
         drawFoldHeader(self, context, tabpanel_data)
 
     top_panel = None
+    stale = []
     for p in plist:
-        pdata = panel_data[p.realID]
-
+        if not hasattr(p, "realID") or panel_data.get(p.realID) is None:
+            stale.append(p)
+            continue
         if hasattr(p, "bl_options"):
-            if "HIDE_HEADER" in p.bl_options and not (
-                p.bl_region_type == "TOOLS" and p.bl_space_type == "VIEW_3D"
-            ):  # further exceptions only for GroupPro addon :(
-                # print( ' extra draw', p)
-                top_panel = p  # draw_panels.append(p)
+            if "HIDE_HEADER" in p.bl_options:
+                top_panel = p
                 plist.remove(p)
+                draw_panels.append(p)  # draw unconditionally, before tab content
+    for p in stale:
+        plist.remove(p)
 
     for p in plist:
         if hasattr(
@@ -965,6 +964,9 @@ def drawTabs(self, context, plist, tabID):
             while add_panel and hasattr(ppanel, "bl_parent_id"):
                 level += 1
                 ppanel = getattr(bpy.types, ppanel.bl_parent_id)
+                if not hasattr(ppanel, "realID") or panel_data.get(ppanel.realID) is None:
+                    add_panel = False
+                    break
                 add_panel = add_panel and panel_data[ppanel.realID].activated
 
             if add_panel:
@@ -1077,6 +1079,9 @@ def drawTabs(self, context, plist, tabID):
                 while visible and hasattr(ppanel, "bl_parent_id"):
                     level += 1
                     ppanel = getattr(bpy.types, ppanel.bl_parent_id)
+                    if not hasattr(ppanel, "realID") or panel_data.get(ppanel.realID) is None:
+                        visible = False
+                        break
                     visible = visible and panel_data[ppanel.realID].activated
 
                 maxlevel = max(maxlevel, level)
@@ -1166,16 +1171,9 @@ def modifiersDraw(self, context):
                 _draw_item_tabs(self, context, maincol, ob.modifiers, active_modifiers,
                                 "object.activate_modifier", "modifier_name")
                 mySeparator(maincol)
-            for md in ob.modifiers:
-                if md.name in active_modifiers:
-                    box = layout.template_modifier(md)
-                    if box:
-                        getattr(self, md.type)(box, ob, md)
+            layout.template_modifiers()
         else:
-            for md in ob.modifiers:
-                box = layout.template_modifier(md)
-                if box:
-                    getattr(self, md.type)(box, ob, md)
+            layout.template_modifiers()
 
 
 def constraintsDraw(self, context):
@@ -1204,12 +1202,9 @@ def constraintsDraw(self, context):
             if len(ob.constraints) > 1:
                 _draw_item_tabs(self, context, maincol, ob.constraints, active_constraints,
                                 "object.activate_constraint", "constraint_name")
-            for con in ob.constraints:
-                if con.name in active_constraints:
-                    self.draw_constraint(context, con)
+            layout.template_constraints(use_bone_constraints=False)
         else:
-            for con in ob.constraints:
-                self.draw_constraint(context, con)
+            layout.template_constraints(use_bone_constraints=False)
 
 
 def boneConstraintsDraw(self, context):
@@ -1226,12 +1221,9 @@ def boneConstraintsDraw(self, context):
             if len(pb.constraints) > 1:
                 _draw_item_tabs(self, context, maincol, pb.constraints, active_constraints,
                                 "object.activate_posebone_constraint", "constraint_name")
-            for con in pb.constraints:
-                if con.name in active_constraints:
-                    self.draw_constraint(context, con)
+            layout.template_constraints(use_bone_constraints=True)
         else:
-            for con in pb.constraints:
-                self.draw_constraint(context, con)
+            layout.template_constraints(use_bone_constraints=True)
 
 
 def drawPanels(self, context, draw_panels):
@@ -1245,7 +1237,6 @@ def drawPanels(self, context, draw_panels):
             row = box.row()
             row.scale_y = 0.8
             if hasattr(drawPanel, "orig_draw_header"):
-                print("drawing header", drawPanel.bl_label)
                 fakeself = CarryLayout(row)
 
                 drawPanel.orig_draw_header(fakeself, context)
@@ -1268,9 +1259,13 @@ def drawPanels(self, context, draw_panels):
         # these are various functions defined all around blender for panels. We need them to draw the panel inside the tab panel
 
         if hasattr(drawPanel, "draw"):
-            pInstance = drawPanel(bpy.context.window_manager)
-            pInstance.layout = layout
-            drawPanel.draw(pInstance, context)
+            try:
+                pInstance = drawPanel(bpy.context.window_manager)
+                pInstance.layout = layout
+                drawPanel.draw(pInstance, context)
+            except Exception as e:
+                panel_id = getattr(drawPanel, "bl_idname", repr(drawPanel))
+                print(f"tabs_interface: skipping panel {panel_id!r}: {e}")
         layoutActive(self, context)
 
         layout.separator()
@@ -1745,6 +1740,12 @@ class ActivateModifier(bpy.types.Operator):
             ob.active_modifiers.remove(self.modifier_name)
         elif self.modifier_name not in ob.active_modifiers:
             ob.active_modifiers.append(self.modifier_name)
+
+        active = ob.active_modifiers if ob.active_modifiers else (
+            [ob.modifiers[0].name] if ob.modifiers else []
+        )
+        for md in ob.modifiers:
+            md.show_expanded = md.name in active
         return {"FINISHED"}
 
     def invoke(self, context, event):
@@ -1764,6 +1765,7 @@ class ActivateConstraint(bpy.types.Operator):
     bl_options = {"REGISTER"}
 
     constraint_name: bpy.props.StringProperty(name="Constraint name", default="")
+    shift: bpy.props.BoolProperty(name="shift", default=False)
 
     def execute(self, context):
         ob = bpy.context.active_object
@@ -1774,6 +1776,12 @@ class ActivateConstraint(bpy.types.Operator):
             ob.active_constraints.remove(self.constraint_name)
         elif self.constraint_name not in ob.active_constraints:
             ob.active_constraints.append(self.constraint_name)
+
+        active = ob.active_constraints if ob.active_constraints else (
+            [ob.constraints[0].name] if ob.constraints else []
+        )
+        for con in ob.constraints:
+            con.show_expanded = con.name in active
         return {"FINISHED"}
 
     def invoke(self, context, event):
@@ -1793,6 +1801,7 @@ class ActivatePoseBoneConstraint(bpy.types.Operator):
     bl_options = {"REGISTER"}
 
     constraint_name: bpy.props.StringProperty(name="Constraint name", default="")
+    shift: bpy.props.BoolProperty(name="shift", default=False)
 
     def execute(self, context):
         pb = bpy.context.pose_bone
@@ -1804,6 +1813,11 @@ class ActivatePoseBoneConstraint(bpy.types.Operator):
         elif self.constraint_name not in pb.active_constraints:
             pb.active_constraints.append(self.constraint_name)
 
+        active = pb.active_constraints if pb.active_constraints else (
+            [pb.constraints[0].name] if pb.constraints else []
+        )
+        for con in pb.constraints:
+            con.show_expanded = con.name in active
         return {"FINISHED"}
 
     def invoke(self, context, event):
@@ -1823,8 +1837,6 @@ class TabsPanel:
             return True
         if prefs.enable_disabling:
             if prefs.disable_PROPERTIES and context.area.type == "PROPERTIES":
-                return False
-            if prefs.disable_TOOLBAR and context.region.type == "TOOLS":
                 return False
             if prefs.disable_UI and context.region.type == "UI":
                 return False
@@ -1966,41 +1978,6 @@ class VIEW3D_PT_Transform(bpy.types.Panel):
         row.column(align=True).prop(ob, "dimensions")
 
 
-def updateDisabling(self, context):
-    prefs = bpy.context.preferences.addons[__package__].preferences
-    s = bpy.context.window_manager
-    spaces = s.panelSpaces
-    panel_data = s.panelData
-    if prefs.enable_disabling and prefs.disable_TOOLBAR:
-
-        for sname in spaces:
-            space = spaces[sname]
-            for rname in space:
-                if rname == "TOOLS":
-                    region = space[rname]
-                    for p in region:
-                        # pdata = panel_data[p.realID]
-
-                        if hasattr(p, "bl_category"):
-                            p.bl_category = p.orig_category
-                            bpy.utils.unregister_class(p)
-                            bpy.utils.register_class(p)
-
-    if not prefs.enable_disabling or not prefs.disable_TOOLBAR:
-        for sname in spaces:
-            space = spaces[sname]
-            for rname in space:
-                region = space[rname]
-                for p in region:
-                    if hasattr(p, "orig_category"):
-                        # p.bl_category = 'Tools'
-                        # try:# TODO fix this
-                        bpy.utils.unregister_class(p)
-                        bpy.utils.register_class(p)
-                        # except:
-                        #     print('fail enable disable ',p)
-
-
 class TabInterfacePreferences(bpy.types.AddonPreferences):
     bl_idname = __package__
     # here you define the addons customizable props
@@ -2043,31 +2020,21 @@ class TabInterfacePreferences(bpy.types.AddonPreferences):
         name="Enable tab panel disable for areas",
         description="switch to/from hiding mode",
         default=True,
-        update=updateDisabling,
-    )
-    disable_TOOLBAR: bpy.props.BoolProperty(
-        name="Disable tabs in toolbar regions",
-        description="switch to/from hiding mode",
-        default=True,
-        update=updateDisabling,
     )
     disable_UI: bpy.props.BoolProperty(
         name="Disable tabs in UI regions",
         description="switch to/from hiding mode",
         default=False,
-        update=updateDisabling,
     )
     disable_PROPERTIES: bpy.props.BoolProperty(
         name="Disable properties area",
         description="switch to/from hiding mode",
         default=False,
-        update=updateDisabling,
     )
     disable_MODIFIERS: bpy.props.BoolProperty(
         name="Disable for modifiers and constraints",
         description="switch to/from hiding mode",
         default=True,
-        update=updateDisabling,
     )
 
     panelData: bpy.props.CollectionProperty(type=panelData)
@@ -2096,10 +2063,9 @@ class TabInterfacePreferences(bpy.types.AddonPreferences):
         layout.prop(self, "enable_disabling")
         if self.enable_disabling:
             b = layout.box()
-            b.prop(self, "disable_TOOLBAR")
             b.prop(self, "disable_UI")
             b.prop(self, "disable_PROPERTIES")
-            # b.prop(self, "disable_MODIFIERS")
+            b.prop(self, "disable_MODIFIERS")
         layout.prop(self, "reorder_panels")
 
 
@@ -2196,18 +2162,21 @@ def createSceneTabData():
 
 
 def overrideDrawFunctions():
+    prefs = bpy.context.preferences.addons[__package__].preferences
     s = bpy.context.window_manager
     if s.get("functions_overwrite_success") is None:
         s["functions_overwrite_success"] = False
     if not s["functions_overwrite_success"]:
-        try:
-            # Modifiers and constraints are reorderable and were disabled by now.
-            # bpy.types.DATA_PT_modifiers.draw = modifiersDraw
-            # bpy.types.OBJECT_PT_constraints.draw = constraintsDraw
-            # bpy.types.BONE_PT_constraints.draw = boneConstraintsDraw
+        if prefs.disable_MODIFIERS:
             s["functions_overwrite_success"] = True
-        except Exception:
-            pass
+            return
+        try:
+            bpy.types.DATA_PT_modifiers.draw = modifiersDraw
+            bpy.types.OBJECT_PT_constraints.draw = constraintsDraw
+            bpy.types.BONE_PT_constraints.draw = boneConstraintsDraw
+            s["functions_overwrite_success"] = True
+        except Exception as e:
+            print(f"tabs_interface: could not override modifier/constraint draw: {e}")
 
 
 @persistent
@@ -2225,7 +2194,6 @@ def tab_init_handler(scene):
     createSceneTabData()
     s["functions_overwrite_success"] = False
     overrideDrawFunctions()
-    updateDisabling(None, bpy.context)
 
     # Timers are cleared on file load — re-register if needed
     if not bpy.app.timers.is_registered(tab_update_handler):
